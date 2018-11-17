@@ -1,2 +1,5 @@
 *.o
 *.hex
+*.elf
+*.c~
+Makefile~
