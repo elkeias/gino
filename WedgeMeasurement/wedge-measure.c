@@ -2,7 +2,6 @@
 Wedge Measuring Instrument Project - 2015.12.7 - 09:00
 */
 
-이제 한글을 쓸 수 있다.
 
 // ------- Preamble -------- //
 #include <avr/io.h>                        /* Defines pins, ports, etc */
