@@ -1,0 +1,187 @@
+//CLCD Pin Description
+//1.Control Bus
+#define EN PB5
+#define RW PB4
+#define RS PB3
+
+#define TRUE 1
+#define FALSE 0
+
+//2.Data Bus
+#define DATA_BUS                PORTC
+#define CONTROL_BUS             PORTB
+#define DATA_BUS_DIRECTION      DDRC
+#define CONTROL_BUS_DIRECTION   DDRB
+
+//3.Busy Check Pin
+#define DATA_BUS_BUSY           PINC
+#define BUSY_BIT                0x80
+
+//CLCD Commands
+//1.Clear Display
+#define CMD_CLEAR_DISPLAY       0x01
+
+//2.Return HOME
+#define CMD_RETURN_HOME         0x02
+
+//3.Entry Mode Set
+#define CMD_ENTRY_MODE_SET_OPTION1	0x04	//cursor [left], display shift [none]
+#define CMD_ENTRY_MODE_SET_OPTION2	0x05	//cursor [left], display shift []
+#define CMD_ENTRY_MODE_SET_OPTION3	0x06	//cursor [right], display shift [none] 사용
+#define CMD_ENTRY_MODE_SET_OPTION4	0x07	//cursor [right], display shift []
+
+//4.Display On/Off
+#define CMD_DISPLAY_OPTION1	0x08	//Display [Off], Cursor [Off], Cursor Blink [Off]
+#define CMD_DISPLAY_OPTION2	0x09	//Display [Off], Cursor [Off], Cursor Blink [On]
+#define CMD_DISPLAY_OPTION3	0x0A	//Display [Off], Cursor [On], Cursor Blink [Off]
+#define CMD_DISPLAY_OPTION4	0x0B	//Display [Off], Cursor [On], Cursor Blink [Off]
+#define CMD_DISPLAY_OPTION5	0x0C	//Display [On], Cursor [Off], Cursor Blink [Off]
+#define CMD_DISPLAY_OPTION6	0x0D	//Display [On], Cursor [Off], Cursor Blink [On]
+#define CMD_DISPLAY_OPTION7	0x0E	//Display [On], Cursor [On], Cursor Blink [Off]
+#define CMD_DISPLAY_OPTION8	0x0F	//Display [On], Cursor [Off], Cursor Blink [On] 사용
+
+//5.Cursor or Display Shift
+#define CMD_CURSOR_DISPLAY_SHIFT_OPTION1	0x10	//[Cursor] Select, Cursor Shift [Left]
+#define CMD_CURSOR_DISPLAY_SHIFT_OPTION2	0x14	//[Cursor] Select, Cursor Shift [Right]
+#define CMD_CURSOR_DISPLAY_SHIFT_OPTION3	0x18	//[Cursor] Select, Cursor Shift [Left]
+#define CMD_CURSOR_DISPLAY_SHIFT_OPTION4	0x1C	//[Cursor] Select, Cursor Shift [Right]
+
+//6.Function Set
+#define CMD_FUNCTION_SET_OPTION1	0x20	//[4] bit ode, [1] line, [5x8] Font
+#define CMD_FUNCTION_SET_OPTION2	0x24	//[4] bit ode, [1] line, [5x11] Font
+#define CMD_FUNCTION_SET_OPTION3	0x28	//[4] bit ode, [2] line, [5x8] Font //***Used
+#define CMD_FUNCTION_SET_OPTION4	0x2C	//[4] bit ode, [2] line, [5x11] Font
+#define CMD_FUNCTION_SET_OPTION5	0x30	//[8] bit ode, [1] line, [5x8] Font
+#define CMD_FUNCTION_SET_OPTION6	0x3C	//[8] bit ode, [1] line, [5x11] Font
+#define CMD_FUNCTION_SET_OPTION7	0x34	//[8] bit ode, [2] line, [5x8] Font
+#define CMD_FUNCTION_SET_OPTION8	0x38	//[8] bit ode, [2] line, [5x11] Font
+
+#define LINE1	0x80
+#define LINE2	0xC0
+#define BIT4_MODE	10	//이 값은 아무 의미 없다
+#define BIT8_MODE	20
+
+//Function declaration
+void clcd_port_init(void);
+//void clcd_init(void);
+unsigned char clcd_init(unsigned char bit_mode);
+void clcd_busy_check(void);
+void clcd_command(unsigned char cmd);
+void clcd_data(unsigned char data);
+void clcd_char(unsigned char data);
+void clcd_str(unsigned char cmd, char *string);
+
+unsigned char clcd_init(unsigned char bit_mode){
+	clcd_port_init();
+	_delay_ms(500);	//CLCD 초기시간 확보를 위해 일부러 넣은 것임.
+				//아래 30ms를 확보하지 못해 초기화가 안되는 경우가 가끔 있음.
+
+	if(bit_mode==BIT4_MODE){
+		//4bit init code here!!
+		clcd_command(CMD_FUNCTION_SET_OPTION3);
+		_delay_ms(5);
+		clcd_command(CMD_FUNCTION_SET_OPTION3);
+		_delay_ms(1);
+		clcd_command(CMD_FUNCTION_SET_OPTION3);
+		clcd_command(CMD_FUNCTION_SET_OPTION3);
+		clcd_command(CMD_DISPLAY_OPTION8);
+		clcd_command(CMD_RETURN_HOME);
+		clcd_command(CMD_ENTRY_MODE_SET_OPTION3);
+		clcd_command(CMD_CLEAR_DISPLAY);
+		return TRUE;
+	}
+	else if(bit_mode==BIT8_MODE){return TRUE;}	//8bit init code here!!
+	else {return FALSE;}
+}
+
+void clcd_port_init(void){
+	CONTROL_BUS_DIRECTION |= (1 << PB3)|(1 << PB4)|(1 << PB5);	//컨트롤 출력
+	DATA_BUS_DIRECTION = 0x00;		//
+	CONTROL_BUS = 0x00;			//EN=0
+	DATA_BUS = 0x00;
+}
+
+void clcd_busy_check(void){
+	unsigned char busy_flag = 0;
+	unsigned int busy_time = 0;
+	clcd_port_init();
+	
+	do{
+		CONTROL_BUS &= ~(1 << RS);	//RS=0
+		CONTROL_BUS |= (1 << RW);	//RW=1
+		CONTROL_BUS |= (1 << EN);	//EN=1
+
+		busy_flag = DATA_BUS_BUSY;
+		CONTROL_BUS |= (1 << EN);	//EN=1
+		CONTROL_BUS &= ~(1 << EN);	//EN=0
+		busy_time++;
+	}while((busy_flag & BUSY_BIT) && (busy_time < 500));	//busy=1인 경우 루프
+	
+	//busy=0인 경우, 원래대로 리턴
+	CONTROL_BUS_DIRECTION |= (1 << PB3)|(1 << PB4)|(1 << PB5);	//컨트롤 출력
+	DATA_BUS_DIRECTION |= (1 << PC2)|(1 << PC3)|(1 << PC4)|(1 << PC5);		//모두 출력
+	CONTROL_BUS &= ~(1 << EN);			//EN=0
+	}
+
+
+void clcd_command(unsigned char cmd){
+	clcd_busy_check();	//check busy flag
+
+	DATA_BUS = (cmd & 0xF0);	//상위 니블
+	CONTROL_BUS &= ~(1 << RS);		//RS=0
+	CONTROL_BUS &= ~(1 << RW);		//RW=0
+	CONTROL_BUS |= (1 << EN);		//EN=1
+	CONTROL_BUS &= ~(1 << EN);		//EN=0
+
+	DATA_BUS = (cmd & 0x0F) << 4;
+	CONTROL_BUS &= ~(1 << RS);		//RS=0
+	CONTROL_BUS &= ~(1 << RW);		//RS=0
+	CONTROL_BUS |= (1 << EN);		//EN=1
+	CONTROL_BUS &= ~(1 << EN);		//EN=0
+}
+
+void clcd_data(unsigned char cmd){
+	clcd_busy_check();		//check busy flag
+	
+	DATA_BUS = (cmd & 0xF0);	//Upper Nibble
+	CONTROL_BUS |= (1 << RS);		//RS=1
+	CONTROL_BUS &= ~(1 << RW);		//RW=0
+	CONTROL_BUS |= (1 << EN);		//EN=1
+	CONTROL_BUS &= ~(1 << EN);		//EN=0
+
+	DATA_BUS = (cmd & 0x0F) << 4;
+	CONTROL_BUS |= (1 << RS);		//RS=1
+	CONTROL_BUS &= ~(1 << RW);		//RW=0
+	CONTROL_BUS |= (1 << EN);		//EN=1
+	CONTROL_BUS &= ~(1 << EN);		//EN=0
+}
+
+void clcd_char(unsigned char ch){
+	clcd_data(ch);
+}
+
+unsigned char clcd_position(unsigned char x, unsigned char y){
+	unsigned char location = 0;
+	if(y > 0x01) { y = 0x01; }
+	if(y > 0x0F) { x = 0x0F; }
+	if(y==0) {location = x + LINE1;}	//1행에 표시
+	else {location = x + LINE2;}	//2행에 표시
+	return location;
+}
+
+void clcd_cmd_str(unsigned char cmd, unsigned char *string) {
+	clcd_command(cmd);
+	while(*string != '\0') {
+		clcd_char(*string);
+		string++;
+	}
+}
+
+void clcd_str(unsigned char cmd, char *string){
+	clcd_command(cmd);
+	while(*string != '\0'){
+		clcd_char(*string);
+		string++;
+	}
+}
+
